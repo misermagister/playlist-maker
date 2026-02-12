@@ -232,6 +232,86 @@
   .track-status.ok { color: var(--green); background: var(--green-glow); }
   .track-status.fail { color: var(--red); background: rgba(231,76,60,0.12); }
 
+  .track-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .track-actions button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .track-actions button:hover { border-color: var(--text-dim); color: var(--text); }
+  .track-actions button.delete-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* Edit modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: fadeUp 0.25s ease;
+  }
+
+  .modal h3 { font-size: 1rem; margin-bottom: 4px; }
+  .modal .subtitle { font-size: 0.82rem; color: var(--text-dim); margin-bottom: 16px; }
+
+  .search-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .search-row input { flex: 1; margin-bottom: 0; }
+  .search-row .btn { white-space: nowrap; }
+
+  .search-results {
+    list-style: none;
+    margin-bottom: 16px;
+  }
+
+  .search-result {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .search-result:hover { background: var(--surface2); border-color: var(--border); }
+  .search-result.selected { background: var(--green-glow); border-color: var(--green); }
+
   .progress-wrap { margin: 20px 0; }
 
   .progress-bar {
@@ -490,6 +570,25 @@
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
         <div class="progress-text" id="progress-text">0%</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit/Search Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>Fix Track</h3>
+    <p class="subtitle" id="modal-original">Original search: —</p>
+
+    <div class="search-row">
+      <input type="text" id="modal-search-input" placeholder="Search Spotify..." spellcheck="false">
+      <button class="btn btn-primary" onclick="modalSearch()" style="padding:10px 18px">Search</button>
+    </div>
+
+    <ul class="search-results" id="modal-results"></ul>
+
+    <div class="btn-row" style="justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -889,14 +988,108 @@
         <div class="track-info">
           <div class="track-name">${esc(t.name)}</div>
           <div class="track-artist">${esc(t.artist)}</div>
-          ${t.status === 'ok' && t.query ? `<div class="track-searched">searched: ${esc(t.query)}</div>` : ''}
+          ${t.query ? `<div class="track-searched">searched: ${esc(t.query)}</div>` : ''}
           ${t.student ? `<div class="track-student">${esc(t.student)}</div>` : ''}
         </div>
-        <span class="track-status ${t.status}">${t.status === 'ok' ? '✓' : '✗'}</span>
+        <div class="track-actions">
+          <button onclick="openEditModal(${i})" title="Fix / re-search">✎</button>
+          <button class="delete-btn" onclick="deleteTrack(${i})" title="Remove">✕</button>
+        </div>
       </li>
     `).join('');
 
     document.getElementById('createBtn').disabled = ok.length === 0;
+  }
+
+  // ── Delete track ──
+  function deleteTrack(index) {
+    resolvedTracks.splice(index, 1);
+    renderReview();
+  }
+
+  // ── Edit modal ──
+  let editingIndex = -1;
+
+  function openEditModal(index) {
+    editingIndex = index;
+    const t = resolvedTracks[index];
+    document.getElementById('modal-original').textContent = 'Original search: ' + (t.query || t.name);
+    document.getElementById('modal-search-input').value = t.query || t.name;
+    document.getElementById('modal-results').innerHTML = '';
+    document.getElementById('edit-modal').classList.add('active');
+    document.getElementById('modal-search-input').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('edit-modal').classList.remove('active');
+    editingIndex = -1;
+  }
+
+  // Close modal on overlay click
+  document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  // Enter key to search in modal
+  document.getElementById('modal-search-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') modalSearch();
+  });
+
+  async function modalSearch() {
+    const query = document.getElementById('modal-search-input').value.trim();
+    if (!query) return;
+
+    const resultsEl = document.getElementById('modal-results');
+    resultsEl.innerHTML = '<li style="color:var(--text-dim);font-size:0.85rem;padding:8px">Searching...</li>';
+
+    try {
+      const data = await spotifyGet('/search?type=track&limit=5&q=' + encodeURIComponent(query));
+      const tracks = data.tracks?.items || [];
+
+      if (tracks.length === 0) {
+        resultsEl.innerHTML = '<li style="color:var(--text-dim);font-size:0.85rem;padding:8px">No results found. Try a different search.</li>';
+        return;
+      }
+
+      resultsEl.innerHTML = tracks.map((track, i) => `
+        <li class="search-result" onclick="pickTrack(${i})">
+          ${track.album.images[2]?.url
+            ? `<img class="track-art" src="${track.album.images[2].url}" alt="" style="width:40px;height:40px">`
+            : `<div class="track-art" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1rem;color:var(--text-dim)">♪</div>`
+          }
+          <div class="track-info">
+            <div class="track-name">${esc(track.name)}</div>
+            <div class="track-artist">${esc(track.artists.map(a => a.name).join(', '))}</div>
+          </div>
+        </li>
+      `).join('');
+
+      // Stash results for picking
+      window._modalResults = tracks;
+
+    } catch (err) {
+      resultsEl.innerHTML = `<li style="color:var(--red);font-size:0.85rem;padding:8px">Error: ${err.message}</li>`;
+    }
+  }
+
+  function pickTrack(resultIndex) {
+    const track = window._modalResults[resultIndex];
+    if (!track || editingIndex < 0) return;
+
+    const old = resolvedTracks[editingIndex];
+    resolvedTracks[editingIndex] = {
+      name: track.name,
+      artist: track.artists.map(a => a.name).join(', '),
+      album: track.album.name,
+      art: track.album.images[2]?.url || track.album.images[0]?.url || '',
+      uri: track.uri,
+      status: 'ok',
+      query: old.query,
+      student: old.student
+    };
+
+    closeModal();
+    renderReview();
   }
 
   // ── Create playlist ──
