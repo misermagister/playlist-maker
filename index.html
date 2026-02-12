@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sheet → Spotify Playlist</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --text: #e8e6e1;
+    --text-dim: #8a8780;
+    --green: #1db954;
+    --green-dim: #1aa34a;
+    --green-glow: rgba(29, 185, 84, 0.15);
+    --red: #e74c3c;
+    --amber: #f0a830;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+  }
+
+  header { margin-bottom: 48px; text-align: center; }
+
+  header h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 2.8rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--green) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  header p { color: var(--text-dim); font-size: 0.95rem; }
+
+  .phase { display: none; }
+  .phase.active { display: block; animation: fadeUp 0.4s ease; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card h2 { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
+  .card .subtitle { font-size: 0.82rem; color: var(--text-dim); margin-bottom: 20px; }
+
+  label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+
+  input[type="text"], input[type="url"] {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 18px;
+  }
+
+  input:focus { border-color: var(--green); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 40px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover { background: var(--green-dim); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--text-dim); }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+
+  .col-map {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .col-map select, #col-student {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a8780' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+    margin-bottom: 18px;
+  }
+
+  .col-map select { margin-bottom: 0; }
+
+  .track-list {
+    list-style: none;
+    max-height: 420px;
+    overflow-y: auto;
+    margin: 0 -8px;
+    padding: 0 8px;
+  }
+
+  .track-list::-webkit-scrollbar { width: 4px; }
+  .track-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .track-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    transition: background 0.15s;
+  }
+
+  .track-item:hover { background: var(--surface2); }
+
+  .track-num {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    min-width: 22px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .track-art {
+    width: 44px; height: 44px;
+    border-radius: 6px;
+    background: var(--surface2);
+    flex-shrink: 0;
+    object-fit: cover;
+  }
+
+  .track-info { flex: 1; min-width: 0; }
+
+  .track-name {
+    font-size: 0.92rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .track-artist {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .track-searched {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-style: italic;
+  }
+
+  .track-student {
+    font-size: 0.72rem;
+    color: var(--green);
+    opacity: 0.8;
+  }
+
+  .track-status {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .track-status.ok { color: var(--green); background: var(--green-glow); }
+  .track-status.fail { color: var(--red); background: rgba(231,76,60,0.12); }
+
+  .progress-wrap { margin: 20px 0; }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  .progress-text {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  .error-msg {
+    color: var(--red);
+    font-size: 0.82rem;
+    margin-top: -10px;
+    margin-bottom: 14px;
+  }
+
+  details { margin-bottom: 18px; }
+
+  details summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--green);
+    font-weight: 500;
+    padding: 4px 0;
+    user-select: none;
+  }
+
+  details summary:hover { text-decoration: underline; }
+
+  details .help-content {
+    margin-top: 10px;
+    padding: 16px;
+    background: var(--surface2);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+
+  details .help-content code {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--text);
+  }
+
+  details .help-content ol { padding-left: 18px; }
+
+  .playlist-name-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+  }
+
+  .playlist-name-row .field { flex: 1; }
+  .playlist-name-row .field input { margin-bottom: 0; }
+
+  .stats-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+
+  .stat {
+    background: var(--surface2);
+    padding: 14px 18px;
+    border-radius: 10px;
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    font-family: 'Instrument Serif', serif;
+  }
+
+  .stat-num.green { color: var(--green); }
+  .stat-num.amber { color: var(--amber); }
+  .stat-num.red { color: var(--red); }
+
+  .stat-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+
+  .connected-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: var(--green-glow);
+    border: 1px solid rgba(29,185,84,0.25);
+    margin-bottom: 18px;
+    font-size: 0.84rem;
+    color: var(--green);
+  }
+
+  @media (max-width: 500px) {
+    header h1 { font-size: 2rem; }
+    .container { padding: 36px 16px 60px; }
+    .card { padding: 20px; }
+    .col-map { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Sheet → Playlist</h1>
+    <p>Students submit song names via Google Form. You turn them into a Spotify playlist.</p>
+  </header>
+
+  <!-- PHASE 1: Setup -->
+  <div id="phase-setup" class="phase active">
+    <div class="card">
+      <h2>Connect Your Accounts</h2>
+      <p class="subtitle">You'll need a Spotify Developer app and a published Google Sheet.</p>
+
+      <div id="connected-banner" class="connected-banner" style="display:none">
+        ✓ Connected to Spotify
+      </div>
+
+      <details>
+        <summary>How do I get a Spotify Client ID?</summary>
+        <div class="help-content">
+          <ol>
+            <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" style="color:var(--green)">developer.spotify.com/dashboard</a></li>
+            <li>Create an app (any name/description)</li>
+            <li>Set the Redirect URI to:<br><code id="redirect-display"></code></li>
+            <li>Under "Which API/SDKs are you planning to use?" select <strong>Web API</strong></li>
+            <li>Copy the <strong>Client ID</strong> and paste it below</li>
+          </ol>
+        </div>
+      </details>
+
+      <label for="clientId">Spotify Client ID</label>
+      <input type="text" id="clientId" placeholder="e.g. a1b2c3d4e5f6..." spellcheck="false">
+
+      <details>
+        <summary>How do I get the Google Sheet URL?</summary>
+        <div class="help-content">
+          <ol>
+            <li>Open your Google Sheet with form responses</li>
+            <li>Go to <strong>File → Share → Publish to web</strong></li>
+            <li>Select the sheet tab, choose <strong>CSV</strong> format</li>
+            <li>Click Publish and copy the URL</li>
+          </ol>
+        </div>
+      </details>
+
+      <label for="sheetUrl">Published Google Sheet CSV URL</label>
+      <input type="url" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" spellcheck="false">
+
+      <div id="setup-error" class="error-msg" style="display:none"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="main-btn" onclick="handleMainAction()">Connect to Spotify</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 2: Map columns -->
+  <div id="phase-columns" class="phase">
+    <div class="card">
+      <h2>Map Your Columns</h2>
+      <p class="subtitle">Tell us which columns have the song title, artist, and student name.</p>
+
+      <div class="col-map">
+        <div>
+          <label for="col-song">Song Title Column</label>
+          <select id="col-song"></select>
+        </div>
+        <div>
+          <label for="col-artist">Artist Column</label>
+          <select id="col-artist"></select>
+        </div>
+      </div>
+
+      <label for="col-student">Student Name Column (optional)</label>
+      <select id="col-student"></select>
+
+      <div id="col-error" class="error-msg" style="display:none"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="searchTracks()">Search Spotify</button>
+        <button class="btn btn-outline" onclick="showPhase('phase-setup')">← Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 3: Review tracks -->
+  <div id="phase-review" class="phase">
+    <div class="card">
+      <h2>Songs Found</h2>
+      <p class="subtitle" id="review-subtitle">We searched Spotify for each submission. Review the matches below.</p>
+
+      <div class="stats-row" id="stats-row"></div>
+
+      <ul class="track-list" id="track-list"></ul>
+
+      <div id="review-error" class="error-msg" style="display:none; margin-top:14px"></div>
+
+      <div class="playlist-name-row" style="margin-top:24px">
+        <div class="field">
+          <label for="playlistName">Playlist Name</label>
+          <input type="text" id="playlistName" value="Class Playlist">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="createBtn" onclick="createPlaylist()">Create Playlist</button>
+        <button class="btn btn-outline" onclick="showPhase('phase-columns')">← Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 4: Done -->
+  <div id="phase-done" class="phase">
+    <div class="card" style="text-align:center">
+      <div style="font-size:3rem; margin-bottom:12px">🎉</div>
+      <h2>Playlist Created!</h2>
+      <p class="subtitle" id="done-subtitle"></p>
+      <div class="btn-row" style="justify-content:center; margin-top:20px">
+        <a id="playlist-link" href="#" target="_blank" class="btn btn-primary" style="text-decoration:none">Open in Spotify</a>
+        <button class="btn btn-outline" onclick="location.reload()">Start Over</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="phase-loading" class="phase">
+    <div class="card">
+      <h2 id="loading-title">Loading...</h2>
+      <p class="subtitle" id="loading-subtitle">Searching Spotify for your students' songs.</p>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-text" id="progress-text">0%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ──
+  let accessToken = null;
+  let spotifyUserId = null;
+  let sheetHeaders = [];
+  let sheetRows = [];
+  let resolvedTracks = [];
+
+  // ── PKCE Helpers ──
+  function generateRandomString(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    const arr = new Uint8Array(length);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => chars[b % chars.length]).join('');
+  }
+
+  async function generateCodeChallenge(verifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  function getRedirectUri() {
+    // Use the page URL without query/hash
+    return window.location.href.split('?')[0].split('#')[0];
+  }
+
+  // Show redirect URI in help text
+  document.getElementById('redirect-display').textContent = getRedirectUri();
+
+  // ── On page load: check for PKCE callback ──
+  (async function init() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+
+    if (error) {
+      showError('setup-error', 'Spotify authorization was denied: ' + (params.get('error_description') || error));
+      history.replaceState(null, '', getRedirectUri());
+      return;
+    }
+
+    if (code) {
+      // Exchange code for token
+      const verifier = sessionStorage.getItem('pkce_verifier');
+      const clientId = sessionStorage.getItem('spm_client_id');
+
+      if (!verifier || !clientId) {
+        showError('setup-error', 'Session expired. Please try connecting again.');
+        history.replaceState(null, '', getRedirectUri());
+        return;
+      }
+
+      try {
+        const resp = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: getRedirectUri(),
+            client_id: clientId,
+            code_verifier: verifier
+          })
+        });
+
+        const data = await resp.json();
+
+        if (data.error) {
+          throw new Error(data.error_description || data.error);
+        }
+
+        accessToken = data.access_token;
+        sessionStorage.removeItem('pkce_verifier');
+
+        // Clean URL
+        history.replaceState(null, '', getRedirectUri());
+
+        // Restore config and proceed
+        document.getElementById('clientId').value = clientId;
+        const sheetUrl = sessionStorage.getItem('spm_sheet_url') || '';
+        document.getElementById('sheetUrl').value = sheetUrl;
+
+        // Show connected state
+        document.getElementById('connected-banner').style.display = 'flex';
+        document.getElementById('main-btn').textContent = 'Fetch Sheet & Build Playlist';
+
+        if (sheetUrl) {
+          fetchSheet(sheetUrl);
+        }
+
+      } catch (err) {
+        showError('setup-error', 'Token exchange failed: ' + err.message);
+        history.replaceState(null, '', getRedirectUri());
+      }
+      return;
+    }
+
+    // No callback — check if we have saved config
+    const savedClientId = sessionStorage.getItem('spm_client_id');
+    const savedSheet = sessionStorage.getItem('spm_sheet_url');
+    if (savedClientId) document.getElementById('clientId').value = savedClientId;
+    if (savedSheet) document.getElementById('sheetUrl').value = savedSheet;
+  })();
+
+  // ── Helpers ──
+  function showPhase(id) {
+    document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function hideError(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  function setProgress(pct, text) {
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = text;
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  async function spotifyGet(endpoint) {
+    const res = await fetch('https://api.spotify.com/v1' + endpoint, {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    if (res.status === 401) throw new Error('Spotify session expired. Please reconnect.');
+    if (!res.ok) throw new Error('Spotify API error: ' + res.status);
+    return res.json();
+  }
+
+  // ── CSV parsing ──
+  function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return { headers: [], rows: [] };
+    const headers = parseCSVLine(lines[0]);
+    const rows = lines.slice(1).map(line => {
+      const vals = parseCSVLine(line);
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = (vals[i] || '').trim(); });
+      return obj;
+    });
+    return { headers, rows };
+  }
+
+  function parseCSVLine(line) {
+    const result = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') inQ = false;
+        else cur += ch;
+      } else {
+        if (ch === '"') inQ = true;
+        else if (ch === ',') { result.push(cur.trim()); cur = ''; }
+        else cur += ch;
+      }
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
+  // ── Main action button ──
+  async function handleMainAction() {
+    hideError('setup-error');
+    const clientId = document.getElementById('clientId').value.trim();
+    const sheetUrl = document.getElementById('sheetUrl').value.trim();
+
+    if (!clientId) return showError('setup-error', 'Please enter your Spotify Client ID.');
+    if (!sheetUrl) return showError('setup-error', 'Please enter your Google Sheet CSV URL.');
+
+    // Save for later
+    sessionStorage.setItem('spm_client_id', clientId);
+    sessionStorage.setItem('spm_sheet_url', sheetUrl);
+
+    // If already authenticated, go straight to fetching
+    if (accessToken) {
+      fetchSheet(sheetUrl);
+      return;
+    }
+
+    // Start PKCE auth flow
+    const verifier = generateRandomString(128);
+    sessionStorage.setItem('pkce_verifier', verifier);
+
+    const challenge = await generateCodeChallenge(verifier);
+
+    const authUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: getRedirectUri(),
+      scope: 'playlist-modify-public playlist-modify-private',
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+      show_dialog: 'true'
+    });
+
+    window.location.href = authUrl;
+  }
+
+  // ── Fetch sheet → show column mapper ──
+  async function fetchSheet(sheetUrl) {
+    showPhase('phase-loading');
+    document.getElementById('loading-title').textContent = 'Fetching spreadsheet...';
+    setProgress(30, 'Downloading CSV...');
+
+    try {
+      const resp = await fetch(sheetUrl);
+      if (!resp.ok) throw new Error('Could not fetch the sheet. Is it published to web as CSV?');
+      const csv = await resp.text();
+
+      setProgress(60, 'Parsing rows...');
+
+      const parsed = parseCSV(csv);
+      if (parsed.rows.length === 0) throw new Error('The sheet has no data rows.');
+
+      sheetHeaders = parsed.headers;
+      sheetRows = parsed.rows;
+
+      setProgress(80, 'Getting Spotify user info...');
+
+      // Get user ID
+      const me = await spotifyGet('/me');
+      spotifyUserId = me.id;
+
+      setProgress(100, 'Done!');
+
+      // Auto-guess columns
+      const guessCol = (patterns) => {
+        const lower = sheetHeaders.map(h => h.toLowerCase());
+        for (const p of patterns) {
+          const idx = lower.findIndex(h => h.includes(p));
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      };
+
+      const songGuess = guessCol(['song', 'title', 'track']);
+      const artistGuess = guessCol(['artist', 'band', 'singer', 'by']);
+      const nameGuess = guessCol(['name', 'student', 'who']);
+
+      const populateSelect = (id, guess, includeNone) => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '';
+        if (includeNone) {
+          const opt = document.createElement('option');
+          opt.value = '__none__';
+          opt.textContent = '— None —';
+          sel.appendChild(opt);
+        }
+        sheetHeaders.forEach((h, i) => {
+          const opt = document.createElement('option');
+          opt.value = h;
+          opt.textContent = h;
+          if (i === guess) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      };
+
+      populateSelect('col-song', songGuess, false);
+      populateSelect('col-artist', artistGuess, false);
+      populateSelect('col-student', nameGuess, true);
+
+      showPhase('phase-columns');
+
+    } catch (err) {
+      showPhase('phase-setup');
+      showError('setup-error', err.message);
+    }
+  }
+
+  // ── Search Spotify for each row ──
+  async function searchTracks() {
+    hideError('col-error');
+
+    const songCol = document.getElementById('col-song').value;
+    const artistCol = document.getElementById('col-artist').value;
+    const studentCol = document.getElementById('col-student').value;
+
+    if (songCol === artistCol) {
+      return showError('col-error', 'Song and Artist columns must be different.');
+    }
+
+    showPhase('phase-loading');
+    document.getElementById('loading-title').textContent = 'Searching Spotify...';
+    setProgress(0, 'Starting...');
+
+    resolvedTracks = [];
+    const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+    for (let i = 0; i < sheetRows.length; i++) {
+      const row = sheetRows[i];
+      const song = row[songCol] || '';
+      const artist = row[artistCol] || '';
+      const student = (studentCol !== '__none__') ? (row[studentCol] || '') : '';
+
+      if (!song) {
+        resolvedTracks.push({
+          name: '(empty)', artist: '—', album: '', art: '', uri: null,
+          status: 'fail', query: '(no song title)', student
+        });
+        continue;
+      }
+
+      const query = artist ? `track:${song} artist:${artist}` : song;
+
+      try {
+        const data = await spotifyGet('/search?type=track&limit=1&q=' + encodeURIComponent(query));
+        const track = data.tracks?.items?.[0];
+
+        if (track) {
+          resolvedTracks.push({
+            name: track.name,
+            artist: track.artists.map(a => a.name).join(', '),
+            album: track.album.name,
+            art: track.album.images[2]?.url || track.album.images[0]?.url || '',
+            uri: track.uri,
+            status: 'ok',
+            query: artist ? `${song} — ${artist}` : song,
+            student
+          });
+        } else {
+          resolvedTracks.push({
+            name: song, artist: artist || '—', album: '', art: '', uri: null,
+            status: 'fail', query: artist ? `${song} — ${artist}` : song, student
+          });
+        }
+      } catch (err) {
+        resolvedTracks.push({
+          name: song, artist: artist || '—', album: '', art: '', uri: null,
+          status: 'fail', query: artist ? `${song} — ${artist}` : song, student
+        });
+      }
+
+      const pct = Math.round(((i + 1) / sheetRows.length) * 100);
+      setProgress(pct, `Searching ${i + 1} / ${sheetRows.length}...`);
+
+      if (i < sheetRows.length - 1) await delay(100);
+    }
+
+    renderReview();
+    showPhase('phase-review');
+  }
+
+  function renderReview() {
+    const ok = resolvedTracks.filter(t => t.status === 'ok');
+    const fail = resolvedTracks.filter(t => t.status === 'fail');
+
+    document.getElementById('stats-row').innerHTML = `
+      <div class="stat"><div class="stat-num green">${ok.length}</div><div class="stat-label">Matched</div></div>
+      ${fail.length ? `<div class="stat"><div class="stat-num red">${fail.length}</div><div class="stat-label">Not Found</div></div>` : ''}
+      <div class="stat"><div class="stat-num">${resolvedTracks.length}</div><div class="stat-label">Total</div></div>
+    `;
+
+    document.getElementById('track-list').innerHTML = resolvedTracks.map((t, i) => `
+      <li class="track-item">
+        <span class="track-num">${i + 1}</span>
+        ${t.art
+          ? `<img class="track-art" src="${t.art}" alt="" loading="lazy">`
+          : `<div class="track-art" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--text-dim)">♪</div>`
+        }
+        <div class="track-info">
+          <div class="track-name">${esc(t.name)}</div>
+          <div class="track-artist">${esc(t.artist)}</div>
+          ${t.status === 'ok' && t.query ? `<div class="track-searched">searched: ${esc(t.query)}</div>` : ''}
+          ${t.student ? `<div class="track-student">${esc(t.student)}</div>` : ''}
+        </div>
+        <span class="track-status ${t.status}">${t.status === 'ok' ? '✓' : '✗'}</span>
+      </li>
+    `).join('');
+
+    document.getElementById('createBtn').disabled = ok.length === 0;
+  }
+
+  // ── Create playlist ──
+  async function createPlaylist() {
+    const name = document.getElementById('playlistName').value.trim() || 'Class Playlist';
+    const ok = resolvedTracks.filter(t => t.status === 'ok');
+    if (ok.length === 0) return;
+
+    hideError('review-error');
+    showPhase('phase-loading');
+    document.getElementById('loading-title').textContent = 'Creating playlist...';
+    setProgress(20, 'Creating playlist on Spotify...');
+
+    try {
+      const playlist = await fetch('https://api.spotify.com/v1/users/' + spotifyUserId + '/playlists', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description: 'Created from Google Form responses on ' + new Date().toLocaleDateString(),
+          public: true
+        })
+      }).then(r => { if (!r.ok) throw new Error('Failed to create playlist'); return r.json(); });
+
+      const uris = ok.map(t => t.uri);
+      for (let i = 0; i < uris.length; i += 100) {
+        const batch = uris.slice(i, i + 100);
+        await fetch('https://api.spotify.com/v1/playlists/' + playlist.id + '/tracks', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uris: batch })
+        });
+        const pct = 20 + Math.round(((i + 100) / uris.length) * 70);
+        setProgress(Math.min(pct, 95), `Adding tracks ${Math.min(i + 100, uris.length)} / ${uris.length}...`);
+      }
+
+      setProgress(100, 'Done!');
+
+      document.getElementById('done-subtitle').textContent =
+        `"${name}" — ${ok.length} track${ok.length === 1 ? '' : 's'} added.`;
+      document.getElementById('playlist-link').href = playlist.external_urls.spotify;
+      showPhase('phase-done');
+
+    } catch (err) {
+      showPhase('phase-review');
+      showError('review-error', 'Failed to create playlist: ' + err.message);
+    }
+  }
+</script>
+
+</body>
+</html>
