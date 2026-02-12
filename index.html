@@ -717,7 +717,9 @@
     setProgress(30, 'Downloading CSV...');
 
     try {
-      const resp = await fetch(sheetUrl);
+      // Cache-bust: Google caches published CSVs for ~5 min
+      const cacheBuster = sheetUrl + (sheetUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+      const resp = await fetch(cacheBuster);
       if (!resp.ok) throw new Error('Could not fetch the sheet. Is it published to web as CSV?');
       const csv = await resp.text();
 
@@ -817,8 +819,21 @@
       const query = artist ? `track:${song} artist:${artist}` : song;
 
       try {
-        const data = await spotifyGet('/search?type=track&limit=1&q=' + encodeURIComponent(query));
-        const track = data.tracks?.items?.[0];
+        // Try strict search first
+        let data = await spotifyGet('/search?type=track&limit=1&q=' + encodeURIComponent(query));
+        let track = data.tracks?.items?.[0];
+
+        // Fallback 1: loose search (no track:/artist: operators)
+        if (!track && artist) {
+          data = await spotifyGet('/search?type=track&limit=1&q=' + encodeURIComponent(song + ' ' + artist));
+          track = data.tracks?.items?.[0];
+        }
+
+        // Fallback 2: song name only
+        if (!track && artist) {
+          data = await spotifyGet('/search?type=track&limit=1&q=' + encodeURIComponent(song));
+          track = data.tracks?.items?.[0];
+        }
 
         if (track) {
           resolvedTracks.push({
