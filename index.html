@@ -1104,7 +1104,7 @@
     setProgress(20, 'Creating playlist on Spotify...');
 
     try {
-      const playlist = await fetch('https://api.spotify.com/v1/me/playlists', {
+      const createResp = await fetch('https://api.spotify.com/v1/me/playlists', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1112,16 +1112,32 @@
           description: 'Created from Google Form responses on ' + new Date().toLocaleDateString(),
           public: true
         })
-      }).then(r => { if (!r.ok) throw new Error('Failed to create playlist'); return r.json(); });
+      });
+
+      if (!createResp.ok) {
+        const errData = await createResp.json().catch(() => ({}));
+        throw new Error('Failed to create playlist: ' + (errData.error?.message || createResp.status));
+      }
+
+      const playlist = await createResp.json();
+      const playlistId = playlist.id;
+
+      if (!playlistId) throw new Error('Playlist created but no ID returned.');
 
       const uris = ok.map(t => t.uri);
       for (let i = 0; i < uris.length; i += 100) {
         const batch = uris.slice(i, i + 100);
-        await fetch('https://api.spotify.com/v1/playlists/' + playlist.id + '/tracks', {
+        const addResp = await fetch('https://api.spotify.com/v1/playlists/' + playlistId + '/tracks', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
           body: JSON.stringify({ uris: batch })
         });
+
+        if (!addResp.ok) {
+          const errData = await addResp.json().catch(() => ({}));
+          throw new Error('Failed to add tracks: ' + (errData.error?.message || addResp.status));
+        }
+
         const pct = 20 + Math.round(((i + 100) / uris.length) * 70);
         setProgress(Math.min(pct, 95), `Adding tracks ${Math.min(i + 100, uris.length)} / ${uris.length}...`);
       }
@@ -1130,7 +1146,7 @@
 
       document.getElementById('done-subtitle').textContent =
         `"${name}" — ${ok.length} track${ok.length === 1 ? '' : 's'} added.`;
-      document.getElementById('playlist-link').href = playlist.external_urls.spotify;
+      document.getElementById('playlist-link').href = playlist.external_urls?.spotify || ('https://open.spotify.com/playlist/' + playlistId);
       showPhase('phase-done');
 
     } catch (err) {
